@@ -1,18 +1,20 @@
-(ns telsos.svc.migrator
+(ns telsos.svc.migrations
   (:require
    [clojure.java.io :as io]
    [migratus.core :as migratus]
-   [telsos.lib.logging :as log]))
+   [telsos.lib.assertions :refer [the]]
+   [telsos.lib.logging :as log]
+   [telsos.svc.jdbc :as jdbc]))
 
 (set! *warn-on-reflection*       true)
 (set! *unchecked-math* :warn-on-boxed)
 
-(def ^:private MIGRATIONS-DIR "migrations/")
+(def ^:private migrations-dir "migrations/")
 
 ;; GENERATING NEW MIGRATION FILE
 (defn create!
   [name- & [type-]]
-  (migratus/create {:migration-dir MIGRATIONS-DIR} name- type-))
+  (migratus/create {:migration-dir migrations-dir} name- type-))
 
 ;; IDS
 (defn- ->id
@@ -29,7 +31,7 @@
   [xs]
   (->> xs (map ->id) (distinct) (sort)))
 
-(defn- file->maybe-id
+(defn- file->opt-id
   [^java.io.File file]
   (when (.isFile file)
     (let [file-name (.getName file)]
@@ -41,13 +43,13 @@
 
 (defn read-ids
   ([]
-   (read-ids (str "resources/" MIGRATIONS-DIR)))
+   (read-ids (str "resources/" migrations-dir)))
 
   ([dir]
    (-> (let [dir-file (io/file dir)]
          (assert (.isDirectory dir-file))
          (for [file  (file-seq dir-file)
-               :let  [id (file->maybe-id file)]
+               :let  [id (file->opt-id file)]
                :when (some? id)]
 
            id))
@@ -57,9 +59,10 @@
 ;; DATABASE MIGRATIONS
 (defn up-with-datasource!
   [datasource ids]
+  (the jdbc/datasource? datasource)
   (let [config
         {:store         :database
-         :migration-dir MIGRATIONS-DIR
+         :migration-dir migrations-dir
          :db            {:datasource datasource}}
 
         ids (->ids ids)]
@@ -69,9 +72,10 @@
 
 (defn down-with-datasource!
   [datasource ids]
+  (the jdbc/datasource? datasource)
   (let [config
         {:store         :database
-         :migration-dir MIGRATIONS-DIR
+         :migration-dir migrations-dir
          :db            {:datasource datasource}}
 
         ids (->ids ids)]
@@ -80,11 +84,12 @@
     (log/info (str "Applied migratus/down to ids " ids " with " datasource))))
 
 ;; TESTING FIXTURES
-(defn migrations-fixture
+(defn fixture
   ([datasource]
-   (migrations-fixture datasource {}))
+   (fixture datasource {}))
 
   ([datasource {:keys [only-up?]}]
+   (the jdbc/datasource? datasource)
    (let [ids (read-ids)]
      (fn [f]
        (up-with-datasource! datasource ids)

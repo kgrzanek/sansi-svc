@@ -8,9 +8,9 @@
 (def version (format "0.1.%s" (build-api/git-count-revs nil)))
 
 ;; SRC/RESOURCES
-(def src-dirs           ["src/"])
-(def resources-dirs     ["resources/"])
-(def src+resources-dirs ["src/" "resources/"])
+(def src-dirs          ["src/"])
+(def resources-dirs    ["resources/"])
+(def copyable-src-dirs ["src/main/clj/" "resources/"])
 
 ;; TARGET(S)
 (def target-dir  "target/")
@@ -54,10 +54,10 @@
        :basis     basis
        :src-dirs  src-dirs}))
 
-  (println "copying" (prs src+resources-dirs) "to" (prs classes-dir))
+  (println "copying" (prs copyable-src-dirs) "to" (prs classes-dir))
   (time
     (build-api/copy-dir
-      {:src-dirs   src+resources-dirs
+      {:src-dirs   copyable-src-dirs
        :target-dir classes-dir}))
 
   (println "creating" uberjar-file)

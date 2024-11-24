@@ -1,11 +1,11 @@
 #kaocha/v1
 {:tests
- [{:id           :unit-test
-   :source-paths ["src" ]
-   :test-paths   ["test"]
-   :ns-patterns  [".*"  ]}
-
-  {:id           :integration-test
+ [{:id           :test-unit
    :source-paths ["src"]
-   :test-paths   ["integration-test"]
-   :ns-patterns  [".*" ]}]}
+   :test-paths   ["test"]
+   :ns-patterns  [".*"]}
+
+  {:id           :test-integration
+   :source-paths ["src"]
+   :test-paths   ["test-integration"]
+   :ns-patterns  [".*"]}]}

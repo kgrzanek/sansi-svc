@@ -1,26 +1,26 @@
 (ns telsos.svc.jdbc
   (:require
-   [clojure.java.jdbc :as jdbc]
    [clojure.string :as str]
    [hikari-cp.core :as hikari]
    [hugsql.adapter :as hugsql-adapter]
    [hugsql.adapter.next-jdbc :as next-adapter]
    [hugsql.core :as hugsql]
-   [jsonista.core :as json]
    [next.jdbc :as next]
-   [next.jdbc.result-set :as next-rs]
+   [next.jdbc.protocols :as next-protocols]
+   [next.jdbc.result-set :as next-result-set]
+   [telsos.lib.assertions :refer [opt the]]
    [telsos.lib.binding :as binding]
    [telsos.lib.fast :as fast]
-   [telsos.lib.logging :as log]
-   [tick.core :as tick])
+   [telsos.lib.logging :as log])
   (:import
+   (com.zaxxer.hikari HikariDataSource)
    (java.util.concurrent.atomic AtomicLong)
    (telsos.lib PerfStats)))
 
 (set! *warn-on-reflection*       true)
 (set! *unchecked-math* :warn-on-boxed)
 
-(->> {:builder-fn next-rs/as-unqualified-maps}
+(->> {:builder-fn next-result-set/as-unqualified-maps}
      (next-adapter/hugsql-adapter-next-jdbc)
      (hugsql/set-adapter!))
 
@@ -31,6 +31,16 @@
     :read-uncommitted
     :repeatable-read
     :serializable})
+
+(defn connection? [x] (instance? java.sql.Connection  x))
+(defn datasource? [x] (instance? javax.sql.DataSource x))
+
+(defn transactable? [x] ;; as understood in next.jdbc
+  (or (connection? x) ;; ~1ns
+      (datasource? x) ;; ~1ns
+
+      ;; ~5μs - we should avoid getting here if possible
+      (satisfies? next-protocols/Sourceable x)))
 
 (def t-conn* (binding/create-scoped))
 
@@ -44,36 +54,30 @@
      (do ~@body)))
 
 (defn tx*
-  [datasource isolation read-only? rollback-only? body]
-  (assert datasource)
-  (assert (or (nil? isolation) (isolation-value? isolation)))
+  [transactable isolation read-only? rollback-only? body]
+  (the transactable? transactable)
+  (opt isolation-value? isolation)
   (next/with-transaction
-    [t-conn
-
-     #_transactable
-     datasource
-
-     #_opts
-     {:isolation     (or isolation :read-committed)
-      :read-only     read-only?
-      :rollback-only rollback-only?}]
+    [t-conn transactable {:isolation     (or isolation :read-committed)
+                          :read-only     read-only?
+                          :rollback-only rollback-only?}]
 
     (binding/scoped [t-conn* t-conn] (body))))
 
 (defmacro read-committed
-  [[datasource read-only? rollback-only?] & body]
-  `(tx* ~datasource :read-committed ~read-only? ~rollback-only?
-        (fn [& _] ~@body)))
+  [[transactable read-only? rollback-only?] & body]
+  `(tx* ~transactable :read-committed ~read-only? ~rollback-only?
+        (fn [& _more#] ~@body)))
 
 (defmacro repeatable-read
-  [[datasource read-only? rollback-only?] & body]
-  `(tx* ~datasource :repeatable-read ~read-only? ~rollback-only?
-        (fn [& _] ~@body)))
+  [[transactable read-only? rollback-only?] & body]
+  `(tx* ~transactable :repeatable-read ~read-only? ~rollback-only?
+        (fn [& _more#] ~@body)))
 
 (defmacro serializable
-  [[datasource read-only? rollback-only?] & body]
-  `(tx* ~datasource :serializable ~read-only? ~rollback-only?
-        (fn [& _] ~@body)))
+  [[transactable read-only? rollback-only?] & body]
+  `(tx* ~transactable :serializable ~read-only? ~rollback-only?
+        (fn [& _more#] ~@body)))
 
 ;; SERIALIZABLE RESTARTS AND PERFORMANCE STATISTICS
 (defn create-perfstats
@@ -91,7 +95,7 @@
 
 (defn perfstats-update!
   [perfstats ^long start-nanos ^long end-nanos]
-  (assert (perfstats? perfstats))
+  (the perfstats? perfstats)
   (if (instance? PerfStats perfstats)
     (.update ^PerfStats perfstats start-nanos end-nanos)
 
@@ -102,7 +106,7 @@
 
 (defn perfstats-msecs
   [perfstats]
-  (assert (perfstats? perfstats))
+  (the perfstats? perfstats)
   (if (instance? PerfStats perfstats)
     (let [[n acc avg] (.statsMsecs ^PerfStats perfstats)]
       {:n (long n) :acc-msecs acc :avg-msecs avg})
@@ -124,83 +128,6 @@
 (defn restarts-count ^long
   [^AtomicLong restarts-counter]
   (.get restarts-counter))
-
-;; SERIALIZABLE FAILURES DETECTION AND RESTARTS
-(defn- pg-serialization-failure?
-  [obj]
-  (or (and (instance? org.postgresql.util.PSQLException obj)
-           ;; https://www.postgresql.org/docs/14/errcodes-appendix.html
-           (= "40001" (.getSQLState ^org.postgresql.util.PSQLException obj)))
-
-      (and (instance? Exception obj)
-           (recur (.getCause ^Exception obj)))))
-
-(defn- signal-pg-restarting-event*
-  [events-handler event]
-  (assert (map? event))
-  (-> event
-      (assoc :thread-id (.threadId (Thread/currentThread)) :instant (tick/instant))
-      events-handler))
-
-(defmacro ^:private signal-pg-restarting-event
-  [events-handler event]
-  (assert (symbol? events-handler))
-  `(when ~events-handler
-     (signal-pg-restarting-event* ~events-handler ~event)))
-
-(defn pg-restarting-on-serialization-failures*
-  [times perfstats restarts-counter events-handler body]
-  (assert (nat-int? times))
-  (assert (or (nil?        perfstats) (perfstats?               perfstats)))
-  (assert (or (nil? restarts-counter) (restarts-counter? restarts-counter)))
-  (assert (or (nil?   events-handler) (ifn?                events-handler)))
-  (assert (ifn? body))
-
-  (let [start-nanos (when perfstats (System/nanoTime))
-
-        result
-        (loop [i 0]
-          (if (= i times)
-            ;; The last attempt - no special treatment, just evaluation of body
-            (do (signal-pg-restarting-event events-handler {:last-attempt i})
-                (body))
-
-            (let [result
-                  (try
-                    (signal-pg-restarting-event events-handler {:attempt i})
-                    (body)
-
-                    (catch Exception e
-                      (when-not (pg-serialization-failure? e)
-                        ;; Other exceptions are simply re-thrown
-                        (signal-pg-restarting-event events-handler {:no-pg-serialization-failure e})
-                        (throw e))
-
-                      (when restarts-counter
-                        (let [cnt (restarts-counter-inc! restarts-counter)]
-                          (signal-pg-restarting-event events-handler {:restarts-counter-inc! cnt})))
-
-                      ::pg-serialization-failure))]
-
-              (if (not= ::pg-serialization-failure result)
-                (do (signal-pg-restarting-event events-handler {:exit-loop-with result})
-                    result)
-
-                (recur (unchecked-inc-int i))))))]
-
-    (when perfstats
-      (let [end-nanos (System/nanoTime)]
-        (signal-pg-restarting-event events-handler {:perfstats-update! [start-nanos end-nanos]})
-        (perfstats-update! perfstats start-nanos end-nanos)))
-
-    (signal-pg-restarting-event events-handler {:return result})
-    result))
-
-(defmacro pg-restarting
-  [{:keys [times perfstats restarts-counter events-handler]} & body]
-  `(pg-restarting-on-serialization-failures*
-     ~times ~perfstats ~restarts-counter ~events-handler
-     (fn [] ~@body)))
 
 ;; HUGSQL LOGGING
 (def log-hugsql*
@@ -250,41 +177,10 @@
 (defmethod hugsql/hugsql-command-fn :query             [_] `hugsql-logging-command-fn)
 (defmethod hugsql/hugsql-command-fn :default           [_] `hugsql-logging-command-fn)
 
-;; JSONB
-(defn create-jsonb-pg-object [value]
-  (doto (org.postgresql.util.PGobject.)
-    (.setType "jsonb")
-    (.setValue (json/write-value-as-string value json/keyword-keys-object-mapper))))
-
-(extend-protocol jdbc/ISQLValue
-  clojure.lang.IPersistentMap
-  (sql-value [m] (create-jsonb-pg-object m))
-
-  clojure.lang.IPersistentVector
-  (sql-value [v] (create-jsonb-pg-object v))
-
-  clojure.lang.Keyword
-  (sql-value [k] (name k))
-
-  java.util.UUID
-  (sql-value [uuid] (str uuid)))
-
-(extend-protocol jdbc/IResultSetReadColumn
-  java.sql.Timestamp
-  (result-set-read-column [v _ _]
-    (.toInstant v))
-
-  org.postgresql.util.PGobject
-  (result-set-read-column [pgobj _ _]
-    (let [value (.getValue pgobj)]
-      (case (.getType pgobj)
-        "jsonb" (json/read-value value json/keyword-keys-object-mapper)
-        :else   value))))
-
 ;; HIKARI CREATION
 (defn create-hikari-datasource
   [datasource-name config]
-  (->> config (merge {:pool-name (str datasource-name)
+  (->> config (merge {:pool-name (name datasource-name)
 
                       ;; When auto-commit is false, the lack of explicit commit
                       ;; rolls the transaction back on the return to the pool;
@@ -304,3 +200,10 @@
        ;; :ssl-mode      "require"
 
        hikari/make-datasource))
+
+(defn close-hikari!
+  [datasource]
+  (when-let [datasource (if (delay? datasource)
+                          (when (realized? datasource) @datasource)
+                          datasource)]
+    (.close ^HikariDataSource datasource)))

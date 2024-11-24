@@ -1,0 +1,28 @@
+services:
+  main-postgres:
+    image: postgres:17
+    container_name: telsos-svc-main-postgres
+    shm_size: 128mb
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 12345
+      POSTGRES_DB: telsos
+    ports:
+      - "5501:5432"
+    volumes:
+      - $HOME/.docker-volumes/telsos-svc/main-postgres:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d
+
+  test-postgres:
+    image: postgres:17
+    container_name: telsos-svc-test-postgres
+    shm_size: 128mb
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 12345
+      POSTGRES_DB: telsos
+    ports:
+      - "5502:5432"
+    volumes:
+      - $HOME/.docker-volumes/telsos-svc/test-postgres:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d
