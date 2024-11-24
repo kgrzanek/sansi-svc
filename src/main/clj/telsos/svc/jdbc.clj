@@ -11,7 +11,7 @@
    [next.jdbc.result-set :as next-rs]
    [telsos.lib.binding :as binding]
    [telsos.lib.fast :as fast]
-   [telsos.svc.logging :as log]
+   [telsos.lib.logging :as log]
    [tick.core :as tick])
   (:import
    (java.util.concurrent.atomic AtomicLong)

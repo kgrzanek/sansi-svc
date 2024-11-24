@@ -2,7 +2,7 @@
   (:require
    [clojure.java.io :as io]
    [migratus.core :as migratus]
-   [telsos.svc.logging :as log]))
+   [telsos.lib.logging :as log]))
 
 (set! *warn-on-reflection*       true)
 (set! *unchecked-math* :warn-on-boxed)

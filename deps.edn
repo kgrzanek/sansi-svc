@@ -1,8 +1,7 @@
 {:paths
  ["src/main/clj"
   "src/main/sql"
-  "resources"
-  "target/classes"]
+  "resources"]
 
  :deps
  {org.clojure/clojure
@@ -16,6 +15,7 @@
   metosin/malli                          {:mvn/version "0.16.4"}
   migratus/migratus                      {:mvn/version "1.6.3"}
   org.postgresql/postgresql              {:mvn/version "42.7.4"}
+  kongra/telsos-lib                      {:mvn/version "0.1.456"}
   tick/tick                              {:mvn/version "1.0"}}
 
  :aliases
