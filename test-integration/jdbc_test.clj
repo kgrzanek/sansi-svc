@@ -3,7 +3,7 @@
    [clojure.test :refer [deftest is testing use-fixtures]]
    [hugsql.core :as hug]
    [telsos.svc.jdbc :as jdbc]
-   [telsos.svc.jdbc.datasources.postgres :refer [test-postgres-datasource]]
+   [telsos.svc.jdbc.datasources.postgres :refer [main-postgres-datasource test-postgres-datasource]]
    [telsos.svc.jdbc.postgres :as pg]
    [telsos.svc.migrations :as migrations])
   (:import
@@ -12,6 +12,11 @@
 (set! *warn-on-reflection*       true)
 (set! *unchecked-math* :warn-on-boxed)
 
+;; RUNNER OF THE DATASOURCE SERVICES WHEN IN nrepl
+(force @main-postgres-datasource)
+(force @test-postgres-datasource)
+
+;; TESTS
 (use-fixtures :once (migrations/fixture @test-postgres-datasource {:only-up? true}))
 
 (declare all-test1-data inc-test1-val!)

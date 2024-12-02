@@ -15,7 +15,7 @@
   (delay (jdbc/create-hikari-datasource
            "test-postgres-datasource" config/test-db)))
 
-;; NS FINALIZATION (for kongra/telsos-sysload)
+;; NS FINALIZATION (for telsos-sysload)
 (defn ns-finalize []
-  (-> main-postgres-datasource jdbc/close-hikari! catching->log-warn)
-  (-> test-postgres-datasource jdbc/close-hikari! catching->log-warn))
+  (catching->log-warn (jdbc/close-hikari! main-postgres-datasource))
+  (catching->log-warn (jdbc/close-hikari! test-postgres-datasource)))

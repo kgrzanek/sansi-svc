@@ -1,5 +1,8 @@
 (ns telsos.svc.core
   (:require
+   [telsos.svc.http.service]
+   [telsos.svc.jdbc.datasources.postgres]
+   [telsos.svc.logging.logback]
    [telsos.svc.runtime-info :refer [print-runtime-info]])
   (:gen-class))
 
@@ -10,4 +13,7 @@
 
 ;; MAIN
 (defn -main [& args]
-  (println "telsos.svc.core/main running" args))
+  (telsos.svc.logging.logback/configure-FILE-appender! "default")
+  (force telsos.svc.jdbc.datasources.postgres/main-postgres-datasource)
+  (force telsos.svc.http.service/jetty)
+  (println "telsos.svc.core/main running" :args args))

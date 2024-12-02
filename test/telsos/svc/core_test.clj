@@ -5,5 +5,5 @@
 
 (deftest test-main
   (testing "-main"
-    (is (= "telsos.svc.core/main running (-arg-1 --arg-2)\n"
+    (is (= "telsos.svc.core/main running :args (-arg-1 --arg-2)\n"
            (with-out-str (core/-main "-arg-1" "--arg-2"))))))
