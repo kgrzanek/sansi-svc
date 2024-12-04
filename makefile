@@ -63,8 +63,3 @@ kaocha-it:
 uberjar:
 	@git rev-parse HEAD > resources/.commit_hash
 	@clojure -T:build uberjar
-
-run:
-	@java -Xmx2G -XX:+UseStringDeduplication \
-		-Dclojure.compiler.direct-linking=true \
-		-jar $(shell find target -name 'telsos-svc-*-STANDALONE.jar')
