@@ -3,7 +3,7 @@
   (:require
    [clojure.tools.build.api :as build-api]))
 
-(def lib     'com.github.kongra/telsos-svc)
+(def lib     'com.github.kgrzanek/sansi-svc)
 (def basis   (build-api/create-basis {:project "deps.edn"}))
 (def version (format "0.1.%s" (build-api/git-count-revs nil)))
 

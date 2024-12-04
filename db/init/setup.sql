@@ -1,16 +1,16 @@
 DROP SCHEMA public;
-CREATE SCHEMA telsos;
+CREATE SCHEMA sansi;
 
 -- Drop users if they exist (useful for resetting)
-DROP USER IF EXISTS telsos_owner;
+DROP USER IF EXISTS sansi_owner;
 
 -- Create users with login capability
-CREATE USER telsos_owner WITH PASSWORD '12345' LOGIN;
+CREATE USER sansi_owner WITH PASSWORD '12345' LOGIN;
 
-ALTER DATABASE telsos OWNER TO telsos_owner;
+ALTER DATABASE sansi OWNER TO sansi_owner;
 
-GRANT ALL PRIVILEGES ON             DATABASE telsos TO telsos_owner;
-GRANT ALL PRIVILEGES ON               SCHEMA telsos TO telsos_owner;
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA telsos TO telsos_owner;
+GRANT ALL PRIVILEGES ON             DATABASE sansi TO sansi_owner;
+GRANT ALL PRIVILEGES ON               SCHEMA sansi TO sansi_owner;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA sansi TO sansi_owner;
 
-ALTER USER telsos_owner SET search_path TO telsos;
+ALTER USER sansi_owner SET search_path TO sansi;
