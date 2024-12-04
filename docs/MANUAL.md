@@ -98,4 +98,14 @@ The following instruction assumes we want to create a new service called *\<serv
    make kaocha-it
    ```
 
-   Have fun!
+
+
+
+7. In order to pull changes from the upstream to this service:
+
+   ```bash
+   git fetch upstream
+   git rebase upstream/master
+   ```
+
+   

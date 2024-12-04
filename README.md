@@ -1,5 +1,5 @@
 # telsos-svc
-A template and a base for Clojure services
+A template for Clojure services
 
 ## Copyright
 Copyright (c) 2021-2024 Kongra Konrad Grzanek.
