@@ -1,5 +1,4 @@
-# telsos-svc
-A template for Clojure services
+# sansi-svc
 
 ## Copyright
 Copyright (c) 2021-2024 Kongra Konrad Grzanek.

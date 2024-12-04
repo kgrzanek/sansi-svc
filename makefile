@@ -37,13 +37,13 @@ ps:
 docker-clean:
 	@echo "Removing all containers and volumes..."
 	@$(DC) down -v
-	@sudo rm -rf ${HOME}/.docker-volumes/telsos-svc
+	@sudo rm -rf ${HOME}/.docker-volumes/sansi-svc
 
 psql-main:
-	@docker exec -it telsos-svc-postgres-main psql -U postgres -d telsos
+	@docker exec -it sansi-svc-postgres-main psql -U postgres -d sansi
 
 psql-test:
-	@docker exec -it telsos-svc-postgres-test psql -U postgres -d telsos
+	@docker exec -it sansi-svc-postgres-test psql -U postgres -d sansi
 
 # CLOJURE
 clean:
@@ -65,7 +65,7 @@ uberjar:
 	@clojure -T:build uberjar
 
 # NATIVE
-TELSOS_UBERJAR := $(shell find target -name "telsos-svc-*-STANDALONE.jar" 2>/dev/null | head -n 1)
+SANSI_UBERJAR := $(shell find target -name "sansi-svc-*-STANDALONE.jar" 2>/dev/null | head -n 1)
 native:
 	native-image \
 		--no-fallback \
@@ -76,5 +76,5 @@ native:
 		--initialize-at-run-time=org.postgresql.Driver \
 		-H:ReflectionConfigurationFiles=resources/graalvm/reflection-config.json \
 		-H:ResourceConfigurationFiles=resources/graalvm/resource-config.json \
-		-jar $(TELSOS_UBERJAR) \
-		target/telsos-svc
+		-jar $(SANSI_UBERJAR) \
+		target/sansi-svc
