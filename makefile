@@ -63,3 +63,7 @@ kaocha-it:
 uberjar:
 	@git rev-parse HEAD > resources/.commit_hash
 	@clojure -T:build uberjar
+
+# NGROK
+ngrok:
+	@ngrok http http://localhost:8080
