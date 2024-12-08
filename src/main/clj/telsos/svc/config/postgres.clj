@@ -11,11 +11,11 @@
   (->> ".secrets.edn" io/read-resource-edn :postgres (the map?)))
 
 (def main-db
-  {:jdbc-url "jdbc:postgresql://localhost:5501/telsos?currentSchema=telsos"
+  {:jdbc-url "jdbc:postgresql://localhost:5501/sansi?currentSchema=sansi"
    :username (->> secrets :username (the non-blank?))
    :password (->> secrets :password (the non-blank?))})
 
 (def test-db
-  {:jdbc-url "jdbc:postgresql://localhost:5502/telsos?currentSchema=telsos"
+  {:jdbc-url "jdbc:postgresql://localhost:5502/sansi?currentSchema=sansi"
    :username (->> secrets :username (the non-blank?))
    :password (->> secrets :password (the non-blank?))})
