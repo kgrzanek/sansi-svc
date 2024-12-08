@@ -21,7 +21,10 @@
   ring/ring-core                         {:mvn/version "1.13.0"}
   ring/ring-jetty-adapter                {:mvn/version "1.13.0"}
   ring/ring-json                         {:mvn/version "0.5.1"}
-  tick/tick                              {:mvn/version "1.0"}}
+  tick/tick                              {:mvn/version "1.0"}
+
+  buddy/buddy-auth                       {:mvn/version "3.0.323"}
+  com.auth0/auth0                        {:mvn/version "2.16.0"}}
 
  :aliases
  {:build
