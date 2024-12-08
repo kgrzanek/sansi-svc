@@ -3,4 +3,5 @@
 .nrepl-port
 logs/
 resources/.commit_hash
+resources/.secrets.edn
 target/

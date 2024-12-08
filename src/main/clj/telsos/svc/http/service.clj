@@ -1,5 +1,8 @@
 (ns telsos.svc.http.service
   (:require
+   [ring.middleware.flash]
+   [ring.middleware.session]
+   [sansi.svc.auth0]
    [telsos.svc.http :as http]
    [telsos.svc.http.routes :refer [routes]]))
 
@@ -8,7 +11,13 @@
 
 (defonce jetty
   (delay (http/jetty-start!
-           (-> routes http/reitit-router http/reitit-handler)
+           (-> routes
+               http/reitit-router
+               http/reitit-handler
+               sansi.svc.auth0/wrap-buddy-auth
+               ring.middleware.session/wrap-session
+               ring.middleware.flash/wrap-flash)
+
            {:port                 8080
             :join?                false
             :use-virtual-threads? true})))
