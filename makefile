@@ -64,17 +64,6 @@ uberjar:
 	@git rev-parse HEAD > resources/.commit_hash
 	@clojure -T:build uberjar
 
-# NATIVE
-SANSI_UBERJAR := $(shell find target -name "sansi-svc-*-STANDALONE.jar" 2>/dev/null | head -n 1)
-native:
-	native-image \
-		--no-fallback \
-		--gc=G1 \
-		-march=native \
-		--initialize-at-build-time \
-		--initialize-at-run-time=com.zaxxer.hikari.pool.HikariPool \
-		--initialize-at-run-time=org.postgresql.Driver \
-		-H:ReflectionConfigurationFiles=resources/graalvm/reflection-config.json \
-		-H:ResourceConfigurationFiles=resources/graalvm/resource-config.json \
-		-jar $(SANSI_UBERJAR) \
-		target/sansi-svc
+# NGROK
+ngrok:
+	@ngrok http http://localhost:8080
