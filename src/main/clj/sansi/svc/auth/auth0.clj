@@ -1,12 +1,11 @@
-(ns sansi.svc.auth0
+(ns sansi.svc.auth.auth0
   (:require
-   [buddy.auth :refer [authenticated?]]
-   [buddy.auth.backends.session :refer [session-backend]]
-   [buddy.auth.middleware :refer [wrap-authentication wrap-authorization]]
    [ring.util.response :as ring-response]
    [telsos.lib.assertions :refer [the]]
-   [telsos.lib.io :as io]
-   [telsos.lib.logging :as log])
+   [telsos.lib.logging :as log]
+   [telsos.lib.strings :refer [non-blank?]]
+   [telsos.svc.config :as config]
+   [telsos.svc.secrets :as secrets])
   (:import
    (com.auth0.client.auth AuthAPI)
    (com.auth0.json.auth TokenHolder UserInfo)))
@@ -15,12 +14,12 @@
 (set! *unchecked-math* :warn-on-boxed)
 
 ;; AUTH-API
-(defonce ^:private secrets
-  (->> ".secrets.edn" io/read-resource-edn :auth0 (the map?)))
+(defonce ^:private secrets (->> secrets/value :auth0 (the map?)))
 
 (defonce ^:private config
-  {:callback-url     "https://745a-37-30-48-41.ngrok-free.app/auth0/callback"
-   :after-logout-url "https://745a-37-30-48-41.ngrok-free.app"})
+  (let [base-url (->> config/value :base-url (the non-blank?))]
+    {:callback-url     (str base-url "/auth0/callback")
+     :after-logout-url base-url}))
 
 (def ^:private auth0-client
   (AuthAPI. (:domain        secrets)
@@ -48,10 +47,12 @@
       .getBody))
 
 ;; AUTHENTICATION HANDLERS
-(defn- handle-login [_request]
+(defn- handle-login
+  [_request]
   (ring-response/redirect (login-url)))
 
-(defn- handle-callback [{:keys [params session]}]
+(defn- handle-callback
+  [{:keys [params session]}]
   (if-let [code (or (get params :code) (get params "code"))]
     (try
       (let [token-response (get-access-token          code)
@@ -64,7 +65,7 @@
              :name    (.get values "name")
              :picture (.get values "picture")}
 
-            session (assoc session :identity identity)]
+            session (assoc session :auth0-identity identity)]
 
         (assoc (ring-response/redirect "/") :session session))
 
@@ -75,7 +76,8 @@
 
     (ring-response/redirect "/auth0/login")))
 
-(defn- handle-logout [_request]
+(defn- handle-logout
+  [_request]
   (-> (ring-response/redirect
         (format "https://%s/v2/logout?client_id=%s&returnTo=%s"
                 (:domain           secrets)
@@ -84,37 +86,23 @@
 
       (assoc :session nil)))
 
-;; MIDDLEWARE
+(def routes
+  [["/auth0"
+    ["/login"    {:get handle-login}]
+    ["/callback" {:get handle-callback}]
+    ["/logout"   {:get handle-logout}]]])
+
+;; FACADE (INCL. MIDDLEWARE)
+(def ^:private not-authenticated-response
+  (-> "Not authenticated with auth0" ring-response/response (ring-response/status 401)))
+
+(defn authenticated?
+  [request]
+  (-> request :session :auth0-identity))
+
 (defn wrap-authenticated [handler]
   (fn [request]
     (if (authenticated? request)
       (handler request)
 
-      {:status  401
-       :headers {}
-       :body    "Not authenticated"})))
-
-(def ^:private auth-backend (session-backend))
-
-(defn wrap-session-auth [handler]
-  (-> handler
-      (wrap-authentication auth-backend)
-      (wrap-authorization  auth-backend)))
-
-(def routes
-  [["/auth0"
-    ["/login"    {:get handle-login}]
-    ["/callback" {:get handle-callback}]
-    ["/logout"   {:get handle-logout}]]
-
-   ["/api" {:middleware [wrap-authenticated]}
-    ["/protected"
-     {:get (fn [request]
-             (ring-response/response
-               {:message "Protected resource"
-                :user    (get-in request [:session :identity])}))}]]
-   ["/"
-    {:get (fn [request]
-            (if (authenticated? request)
-              (ring-response/response (pr-str "User: " (get-in request [:session :identity])))
-              (ring-response/response "Please, login-in")))}]])
+      not-authenticated-response)))
