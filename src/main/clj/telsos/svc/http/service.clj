@@ -2,7 +2,8 @@
   (:require
    [ring.middleware.flash]
    [ring.middleware.session]
-   [sansi.svc.auth0]
+   [sansi.svc.auth.auth0]
+   [sansi.svc.auth.bearer-token]
    [telsos.svc.http :as http]
    [telsos.svc.http.routes :refer [routes]]))
 
@@ -14,8 +15,8 @@
            (-> routes
                http/reitit-router
                http/reitit-handler
-               sansi.svc.auth0/wrap-session-auth
                ring.middleware.session/wrap-session
+               sansi.svc.auth.bearer-token/wrap-bearer-token
                ring.middleware.flash/wrap-flash)
 
            {:port                 8080
