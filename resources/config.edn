@@ -1,2 +1,4 @@
-{:postgres {:main-db {:jdbc-url "jdbc:postgresql://localhost:5501/telsos?currentSchema=telsos"}
-            :test-db {:jdbc-url "jdbc:postgresql://localhost:5502/telsos?currentSchema=telsos"}}}
+{:postgres {:main-db {:jdbc-url "jdbc:postgresql://localhost:5501/sansi?currentSchema=sansi"}
+            :test-db {:jdbc-url "jdbc:postgresql://localhost:5502/sansi?currentSchema=sansi"}}
+
+ :base-url "https://a470-79-185-1-159.ngrok-free.app"}
