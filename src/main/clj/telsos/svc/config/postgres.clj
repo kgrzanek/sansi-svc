@@ -1,21 +1,19 @@
 (ns telsos.svc.config.postgres
   (:require
    [telsos.lib.assertions :refer [the]]
-   [telsos.lib.io :as io]
-   [telsos.lib.strings :refer [non-blank?]]))
+   [telsos.lib.strings :refer [non-blank?]]
+   [telsos.svc.config :as config]
+   [telsos.svc.secrets :as secrets]))
 
 (set! *warn-on-reflection*       true)
 (set! *unchecked-math* :warn-on-boxed)
 
-(defonce ^:private secrets
-  (->> ".secrets.edn" io/read-resource-edn :postgres (the map?)))
-
 (def main-db
-  {:jdbc-url "jdbc:postgresql://localhost:5501/telsos?currentSchema=telsos"
-   :username (->> secrets :username (the non-blank?))
-   :password (->> secrets :password (the non-blank?))})
+  {:jdbc-url (->> config/value  :postgres :main-db :jdbc-url (the non-blank?))
+   :username (->> secrets/value :postgres :main-db :username (the non-blank?))
+   :password (->> secrets/value :postgres :main-db :password (the non-blank?))})
 
 (def test-db
-  {:jdbc-url "jdbc:postgresql://localhost:5502/telsos?currentSchema=telsos"
-   :username (->> secrets :username (the non-blank?))
-   :password (->> secrets :password (the non-blank?))})
+  {:jdbc-url (->> config/value  :postgres :test-db :jdbc-url (the non-blank?))
+   :username (->> secrets/value :postgres :test-db :username (the non-blank?))
+   :password (->> secrets/value :postgres :test-db :password (the non-blank?))})

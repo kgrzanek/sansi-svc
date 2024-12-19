@@ -1,0 +1,2 @@
+{:postgres {:main-db {:jdbc-url "jdbc:postgresql://localhost:5501/telsos?currentSchema=telsos"}
+            :test-db {:jdbc-url "jdbc:postgresql://localhost:5502/telsos?currentSchema=telsos"}}}
