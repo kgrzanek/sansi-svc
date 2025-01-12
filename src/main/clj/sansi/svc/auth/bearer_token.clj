@@ -57,7 +57,7 @@
 
       (handler request))))
 
-(defn authenticated?
+(defn- authenticated?
   [request]
   (when-let [{:keys [expiration-msecs]} (:bearer-token-claims request)]
     (the nat-int? expiration-msecs)

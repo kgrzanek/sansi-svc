@@ -96,7 +96,7 @@
 (def ^:private not-authenticated-response
   (-> "Not authenticated with auth0" ring-response/response (ring-response/status 401)))
 
-(defn authenticated?
+(defn- authenticated?
   [request]
   (-> request :session :auth0-identity))
 
