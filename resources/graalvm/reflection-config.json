@@ -1,0 +1,40 @@
+[
+  {
+    "name": "com.zaxxer.hikari.HikariConfig",
+    "allPublicMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "com.zaxxer.hikari.HikariDataSource",
+    "allPublicMethods": true,
+    "allDeclaredFields": true
+  },
+  {
+    "name": "java.sql.Driver",
+    "allPublicMethods": true
+  },
+  {
+    "name": "org.postgresql.Driver",
+    "allPublicMethods": true
+  },
+  {
+    "name": "java.sql.Statement[]",
+    "unsafeAllocated": true
+  },
+  {
+    "name": "java.sql.Statement",
+    "allPublicMethods": true
+  },
+  {
+    "name": "java.sql.ResultSet",
+    "allPublicMethods": true
+  },
+  {
+    "name": "java.sql.Connection",
+    "allPublicMethods": true
+  },
+  {
+    "name": "java.sql.PreparedStatement",
+    "allPublicMethods": true
+  }
+]

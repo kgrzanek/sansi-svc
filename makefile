@@ -63,3 +63,17 @@ kaocha-it:
 uberjar:
 	@git rev-parse HEAD > resources/.commit_hash
 	@clojure -T:build uberjar
+
+# NATIVE
+native:
+	native-image \
+		--no-fallback \
+		--gc=G1 \
+		-march=native \
+		--initialize-at-build-time \
+		--initialize-at-run-time=com.zaxxer.hikari.pool.HikariPool \
+		--initialize-at-run-time=org.postgresql.Driver \
+		-H:ReflectionConfigurationFiles=resources/graalvm/reflection-config.json \
+		-H:ResourceConfigurationFiles=resources/graalvm/resource-config.json \
+		-jar target/telsos-svc-0.1.15-STANDALONE.jar \
+		target/telsos-svc
