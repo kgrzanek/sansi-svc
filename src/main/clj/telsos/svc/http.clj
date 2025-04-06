@@ -5,9 +5,9 @@
    [reitit.ring.middleware.muuntaja :as reitit-muuntaja]
    [reitit.ring.middleware.parameters :as reitit-parameters]
    [ring.adapter.jetty :as ring-jetty]
-   [ring.middleware.json]
    [ring.util.response :as ring-response]
-   [telsos.lib.assertions :refer [the]])
+   [telsos.lib.assertions :refer [the]]
+   [telsos.lib.edn-json :refer [edn->json-string maybe-json-string->maybe-edn]])
   (:import
    (java.util.concurrent Executors)
    (org.eclipse.jetty.util.thread QueuedThreadPool)))
@@ -22,11 +22,7 @@
     routes
     {:data {:middleware
             [reitit-parameters/parameters-middleware
-             reitit-muuntaja/format-middleware
-             [ring.middleware.json/wrap-json-body
-              {:keywords?    true
-               :bigdecimals? true}]
-             ring.middleware.json/wrap-json-response]}}))
+             reitit-muuntaja/format-middleware]}}))
 
 (defn reitit-handler
   ([router]
@@ -97,8 +93,13 @@
   (try
     (the ring-response/response? (body))
     (catch telsos.lib.ValidationException e
-      (log/debug e "ValidationException in handler-body")
-      (ring-response/bad-request {:reason "non-disclosed"}))))
+      (log/debug e)
+      (ring-response/bad-request "telsos.lib.ValidationException"))))
 
 (defmacro handler-body [& body]
   `(handler-body* (fn [] ~@body)))
+
+;; JSON CONSUMING/PRODUCING
+(defn input->maybe-edn
+  [request]
+  (-> request :body slurp str maybe-json-string->maybe-edn))

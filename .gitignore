@@ -1,6 +1,7 @@
 .cpcache/
 .eastwood
 .nrepl-port
+ab-payload.json
 logs/
 resources/.commit_hash
 resources/.secrets.edn
