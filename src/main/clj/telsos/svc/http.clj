@@ -7,7 +7,7 @@
    [ring.adapter.jetty :as ring-jetty]
    [ring.util.response :as ring-response]
    [telsos.lib.assertions :refer [the]]
-   [telsos.lib.edn-json :refer [edn->json-string maybe-json-string->maybe-edn]])
+   [telsos.lib.edn-json :as edn-json])
   (:import
    (java.util.concurrent Executors)
    (org.eclipse.jetty.util.thread QueuedThreadPool)))
@@ -92,14 +92,28 @@
 (defn handler-body* [body]
   (try
     (the ring-response/response? (body))
+
     (catch telsos.lib.ValidationException e
       (log/debug e)
-      (ring-response/bad-request "telsos.lib.ValidationException"))))
+      (ring-response/bad-request "telsos.lib.ValidationException"))
+
+    (catch Throwable e
+      (log/error e)
+      (-> (ring-response/response "Internal Server Error")
+          (ring-response/status 500)))))
 
 (defmacro handler-body [& body]
   `(handler-body* (fn [] ~@body)))
 
 ;; JSON CONSUMING/PRODUCING
-(defn input->maybe-edn
+(defn parse-json-body
   [request]
-  (-> request :body slurp str maybe-json-string->maybe-edn))
+  (-> request :body slurp str edn-json/maybe-json-string->maybe-edn))
+
+(defn json-response
+  ([edn]
+   (-> edn edn-json/edn->json-string ring-response/response))
+
+  ([status edn]
+   (the nat-int? status)
+   (-> edn edn-json/edn->json-string ring-response/response (ring-response/status status))))

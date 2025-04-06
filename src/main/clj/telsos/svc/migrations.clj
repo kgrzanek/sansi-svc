@@ -9,7 +9,7 @@
 (set! *warn-on-reflection*       true)
 (set! *unchecked-math* :warn-on-boxed)
 
-(def ^:private migrations-dir "migrations/")
+(def ^:private migrations-dir "resources/migrations/")
 
 ;; GENERATING NEW MIGRATION FILE
 (defn create!
@@ -43,7 +43,7 @@
 
 (defn read-ids
   ([]
-   (read-ids (str "resources/" migrations-dir)))
+   (read-ids migrations-dir))
 
   ([dir]
    (-> (let [dir-file (io/file dir)]
