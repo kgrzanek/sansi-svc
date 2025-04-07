@@ -1,4 +1,4 @@
-(ns jdbc-test
+(ns telsos.svc.it.jdbc-test
   (:require
    [clojure.test :refer [deftest is testing use-fixtures]]
    [hugsql.core :as hug]
@@ -37,7 +37,7 @@
          (pg/restarting {:times 0}))
 
     (is (= Connection/TRANSACTION_READ_COMMITTED
-           (->> (.getTransactionIsolation ^Connection @jdbc/t-conn*)
+           (->> (Connection/.getTransactionIsolation @jdbc/t-conn*)
                 (jdbc/read-committed [@test-postgres-datasource])
                 (pg/restarting  {:times 0}))))
 
@@ -52,7 +52,7 @@
 
   (testing "repeatable-read"
     (is (= Connection/TRANSACTION_REPEATABLE_READ
-           (->> (.getTransactionIsolation ^Connection @jdbc/t-conn*)
+           (->> (Connection/.getTransactionIsolation @jdbc/t-conn*)
                 (jdbc/repeatable-read [@test-postgres-datasource])
                 (pg/restarting   {:times 0}))))
 
@@ -66,7 +66,7 @@
 
   (testing "serializable"
     (is (= Connection/TRANSACTION_SERIALIZABLE
-           (->> (.getTransactionIsolation ^Connection @jdbc/t-conn*)
+           (->> (Connection/.getTransactionIsolation @jdbc/t-conn*)
                 (jdbc/serializable  [@test-postgres-datasource])
                 (pg/restarting {:times 0}))))
 
@@ -87,7 +87,7 @@
 (deftest serializable-restarts-test
   (testing "simple update, no restarts behavior"
     (is (= 1 (->> (inc-test1-val-with-delay! 1 1)
-                  (jdbc/serializable  [@test-postgres-datasource])
+                  (jdbc/serializable [@test-postgres-datasource])
                   (pg/restarting {:times 0})))))
 
   (testing "restart of tx1 in future-1"

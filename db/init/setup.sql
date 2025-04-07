@@ -1,16 +1,16 @@
-DROP SCHEMA public;
-CREATE SCHEMA telsos;
+drop schema if exists public cascade;
+create schema telsos;
 
--- Drop users if they exist (useful for resetting)
-DROP USER IF EXISTS telsos_owner;
+-- create owner user with all privileges
+drop user if exists telsos_owner;
+create user telsos_owner with password '12345' login;
 
--- Create users with login capability
-CREATE USER telsos_owner WITH PASSWORD '12345' LOGIN;
+-- grant all necessary privileges in one step
+alter database telsos owner to telsos_owner;
+grant all privileges on schema telsos to telsos_owner;
+grant all privileges on all tables in schema telsos to telsos_owner;
+grant usage on schema telsos to telsos_owner;
+alter default privileges in schema telsos grant all on tables to telsos_owner;
 
-ALTER DATABASE telsos OWNER TO telsos_owner;
-
-GRANT ALL PRIVILEGES ON             DATABASE telsos TO telsos_owner;
-GRANT ALL PRIVILEGES ON               SCHEMA telsos TO telsos_owner;
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA telsos TO telsos_owner;
-
-ALTER USER telsos_owner SET search_path TO telsos;
+-- set search path
+alter user telsos_owner set search_path to telsos;

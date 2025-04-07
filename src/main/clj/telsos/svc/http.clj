@@ -7,9 +7,11 @@
    [ring.adapter.jetty :as ring-jetty]
    [ring.util.response :as ring-response]
    [telsos.lib.assertions :refer [the]]
-   [telsos.lib.edn-json :as edn-json])
+   [telsos.lib.edn-json :as edn-json]
+   [telsos.lib.strings :refer [non-blank?]])
   (:import
    (java.util.concurrent Executors)
+   (org.eclipse.jetty.server Server)
    (org.eclipse.jetty.util.thread QueuedThreadPool)))
 
 (set! *warn-on-reflection*       true)
@@ -73,7 +75,7 @@
                  (when use-virtual-threads?
                    {:thread-pool
                     (doto (QueuedThreadPool.)
-                      (.setVirtualThreadsExecutor
+                      (QueuedThreadPool/.setVirtualThreadsExecutor
                         (Executors/newVirtualThreadPerTaskExecutor)))})))]
 
     (log/info jetty "started")
@@ -81,15 +83,15 @@
     (->Jetty jetty)))
 
 (defn- jetty-stop!
-  [^org.eclipse.jetty.server.Server jetty]
-  (if (.isRunning jetty)
-    (do (.stop jetty)
+  [jetty]
+  (if (Server/.isRunning jetty)
+    (do (Server/.stop jetty)
         (log/info jetty "successfully stopped"))
 
     (log/info jetty "has already been stopped")))
 
 ;; STD. HANDLER BODY
-(defn handler-body* [body]
+(defn handler* [body]
   (try
     (the ring-response/response? (body))
 
@@ -99,16 +101,18 @@
 
     (catch Throwable e
       (log/error e)
-      (-> (ring-response/response "Internal Server Error")
-          (ring-response/status 500)))))
+      (ring-response/status (ring-response/response "Internal Server Error") 500))))
 
-(defmacro handler-body [& body]
-  `(handler-body* (fn [] ~@body)))
+(defmacro handler [& body]
+  `(handler* (fn [] ~@body)))
 
 ;; JSON CONSUMING/PRODUCING
 (defn parse-json-body
-  [request]
-  (-> request :body slurp str edn-json/maybe-json-string->maybe-edn))
+  [{:keys [body] :as _request}]
+  (when body
+    (let [json-body (slurp body)]
+      (when (non-blank? json-body)
+        (edn-json/json-string->edn json-body)))))
 
 (defn json-response
   ([edn]

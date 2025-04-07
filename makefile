@@ -65,6 +65,7 @@ uberjar:
 	@clojure -T:build uberjar
 
 # NATIVE
+TELSOS_UBERJAR := $(shell find target -name "telsos-svc-*-STANDALONE.jar" | head -n 1)
 native:
 	native-image \
 		--no-fallback \
@@ -75,5 +76,5 @@ native:
 		--initialize-at-run-time=org.postgresql.Driver \
 		-H:ReflectionConfigurationFiles=resources/graalvm/reflection-config.json \
 		-H:ResourceConfigurationFiles=resources/graalvm/resource-config.json \
-		-jar target/telsos-svc-0.1.15-STANDALONE.jar \
+		-jar $(TELSOS_UBERJAR) \
 		target/telsos-svc

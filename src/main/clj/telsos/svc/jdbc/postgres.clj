@@ -1,8 +1,8 @@
 (ns telsos.svc.jdbc.postgres
   (:require
    [clojure.java.jdbc :as java-jdbc]
-   [jsonista.core :as json]
-   [telsos.lib.assertions :refer [opt the]]
+   [telsos.lib.assertions :refer [maybe the]]
+   [telsos.lib.edn-json :as edn-json]
    [telsos.svc.jdbc :as jdbc]
    [tick.core :as tick])
   (:import
@@ -15,7 +15,7 @@
 (defn- serialization-failure?
   [obj]
   (or (and (instance? PSQLException obj)
-           ;; https://www.postgresql.org/docs/14/errcodes-appendix.html
+           ;; https://www.postgresql.org/docs/17/errcodes-appendix.html
            (= "40001" (.getSQLState ^PSQLException obj)))
 
       (and (instance? Exception obj)
@@ -36,13 +36,14 @@
 
 (defn restarting-on-serialization-failures*
   [times perfstats restarts-counter events-handler body]
-  (the nat-int?                          times)
-  (opt jdbc/perfstats?               perfstats)
-  (opt jdbc/restarts-counter? restarts-counter)
-  (opt ifn?                     events-handler)
-  (the ifn?                               body)
+  (the nat-int? times)
+  (maybe jdbc/perfstats? perfstats)
+  (maybe jdbc/restarts-counter? restarts-counter)
+  (maybe ifn? events-handler)
+  (the ifn? body)
 
-  (let [start-nanos (when perfstats (System/nanoTime))
+  (let [start-nanos
+        (when perfstats (System/nanoTime))
 
         result
         (loop [i 0]
@@ -92,7 +93,7 @@
 (defn create-jsonb-object [value]
   (doto (PGobject.)
     (.setType "jsonb")
-    (.setValue (json/write-value-as-string value json/keyword-keys-object-mapper))))
+    (.setValue (edn-json/edn->json-string value))))
 
 (extend-protocol java-jdbc/ISQLValue
   clojure.lang.IPersistentMap
@@ -116,5 +117,5 @@
   (result-set-read-column [pgobj _ _]
     (let [value (.getValue pgobj)]
       (case (.getType pgobj)
-        "jsonb" (json/read-value value json/keyword-keys-object-mapper)
+        "jsonb" (edn-json/json-string->edn (str value))
         :else   value))))

@@ -8,7 +8,7 @@
    [next.jdbc :as next]
    [next.jdbc.protocols :as next-protocols]
    [next.jdbc.result-set :as next-result-set]
-   [telsos.lib.assertions :refer [opt the]]
+   [telsos.lib.assertions :refer [maybe the]]
    [telsos.lib.binding :as binding]
    [telsos.lib.fast :as fast]
    [telsos.lib.logging :as log])
@@ -55,8 +55,8 @@
 
 (defn tx*
   [transactable isolation read-only? rollback-only? body]
-  (the transactable? transactable)
-  (opt isolation-value? isolation)
+  (the   transactable? transactable)
+  (maybe isolation-value? isolation)
   (next/with-transaction
     [t-conn transactable {:isolation     (or isolation :read-committed)
                           :read-only     read-only?

@@ -16,4 +16,4 @@
 ;; NS FINALIZATION (for telsos-sysload)
 (defn ns-finalize []
   (when (realized? jetty)
-    (.close ^java.io.Closeable @jetty)))
+    (java.io.Closeable/.close @jetty)))

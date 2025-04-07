@@ -1,4 +1,4 @@
-(ns http-test
+(ns telsos.svc.it.http-test
   (:require
    [clojure.test :refer [deftest is testing]]
    [telsos.svc.http.service :refer [jetty]]))
