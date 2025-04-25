@@ -11,7 +11,8 @@
    [telsos.lib.assertions :refer [maybe the]]
    [telsos.lib.binding :as binding]
    [telsos.lib.fast :as fast]
-   [telsos.lib.logging :as log])
+   [telsos.lib.logging :as log]
+   [tick.core :as tick])
   (:import
    (com.zaxxer.hikari HikariDataSource)
    (java.util.concurrent.atomic AtomicLong)
@@ -36,8 +37,8 @@
 (defn datasource? [x] (instance? javax.sql.DataSource x))
 
 (defn transactable? [x] ;; as understood in next.jdbc
-  (or (connection? x) ;; ~1ns
-      (datasource? x) ;; ~1ns
+  (or (connection?   x) ;; ~1ns
+      (datasource?   x) ;; ~1ns
 
       ;; ~5μs - we should avoid getting here if possible
       (satisfies? next-protocols/Sourceable x)))
@@ -79,7 +80,7 @@
   `(tx* ~transactable :serializable ~read-only? ~rollback-only?
         (fn [& _more#] ~@body)))
 
-;; SERIALIZABLE RESTARTS AND PERFORMANCE STATISTICS
+;; SERIALIZATION FAILURES, RESTARTS, AND PERFORMANCE STATISTICS
 (defn create-perfstats
   ([n]
    (PerfStats. n))
@@ -128,6 +129,80 @@
 (defn restarts-count ^long
   [^AtomicLong restarts-counter]
   (.get restarts-counter))
+
+(defn- signal-restarting-event*
+  [events-handler event]
+  (the map? event)
+  (-> event
+      (assoc :thread-id (.threadId (Thread/currentThread)) :instant (tick/instant))
+      events-handler))
+
+(defmacro ^:private signal-restarting-event
+  [events-handler event]
+  (the symbol? events-handler)
+  `(when ~events-handler
+     (signal-restarting-event* ~events-handler ~event)))
+
+(defn- -serialization-failure? [pred ^Throwable e]
+  (when (some? e)
+    (or (pred e)
+        (-serialization-failure? pred (.getCause e))
+        (loop [supps (seq (.getSuppressed e))]
+          (when supps
+            (or (-serialization-failure? pred (first supps))
+                (recur (next supps))))))))
+
+(defn restarting-on-serialization-failures*
+  [{:keys [times serialization-failure? perfstats restarts-counter events-handler]} body]
+  (the   nat-int?                     times)
+  (maybe perfstats?               perfstats)
+  (maybe restarts-counter? restarts-counter)
+  (maybe ifn?                events-handler)
+  (the   ifn?        serialization-failure?)
+  (the   ifn?                          body)
+
+  (let [start-nanos (when perfstats (System/nanoTime))
+
+        result
+        (loop [i 0]
+          (if (= i times)
+            ;; The last attempt - no special treatment, just evaluation of body
+            (do (signal-restarting-event events-handler {:last-attempt i})
+                (body))
+
+            (let [result
+                  (try (signal-restarting-event events-handler {:attempt i})
+                       (body)
+
+                       (catch Exception e
+                         (when-not (-serialization-failure? serialization-failure? e)
+                           ;; Other exceptions are simply re-thrown
+                           (signal-restarting-event events-handler {:exception e})
+                           (throw e))
+
+                         (when restarts-counter
+                           (let [cnt (restarts-counter-inc! restarts-counter)]
+                             (signal-restarting-event events-handler {:restarts-counter cnt})))
+
+                         ::serialization-failure))]
+
+              (if (not= ::serialization-failure result)
+                (do (signal-restarting-event events-handler {:result result})
+                    result)
+
+                (recur (inc i))))))]
+
+    (when perfstats
+      (let [end-nanos (System/nanoTime)]
+        (signal-restarting-event events-handler {:perfstats-update! [start-nanos end-nanos]})
+        (perfstats-update! perfstats start-nanos end-nanos)))
+
+    (signal-restarting-event events-handler {:return result})
+    result))
+
+(defmacro restarting
+  [options & body]
+  `(restarting-on-serialization-failures* ~options (fn [] ~@body)))
 
 ;; HUGSQL LOGGING
 (def log-hugsql*
@@ -180,21 +255,22 @@
 ;; HIKARI CREATION
 (defn create-hikari-datasource
   [datasource-name config]
-  (->> config (merge {:pool-name (name datasource-name)
+  (->> config
+       (merge {:pool-name (name datasource-name)
 
-                      ;; When auto-commit is false, the lack of explicit commit
-                      ;; rolls the transaction back on the return to the pool;
-                      ;; we keep the default true
-                      :auto-commit true
+               ;; When auto-commit is false, the lack of explicit commit
+               ;; rolls the transaction back on the return to the pool;
+               ;; we keep the default true
+               :auto-commit true
 
-                      :connection-timeout 30000
-                      :idle-timeout       600000
-                      :max-lifetime       1800000
-                      :maximum-pool-size  10
-                      :minimum-idle       10
-                      :validation-timeout 5000
-                      :read-only          false
-                      :register-mbeans    false})
+               :connection-timeout 30000
+               :idle-timeout       600000
+               :max-lifetime       1800000
+               :maximum-pool-size  10
+               :minimum-idle       10
+               :validation-timeout 5000
+               :read-only          false
+               :register-mbeans    false})
 
        ;; :ssl            true
        ;; :ssl-mode      "require"

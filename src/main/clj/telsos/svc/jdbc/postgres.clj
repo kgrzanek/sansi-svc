@@ -1,10 +1,7 @@
 (ns telsos.svc.jdbc.postgres
   (:require
    [clojure.java.jdbc :as java-jdbc]
-   [telsos.lib.assertions :refer [maybe the]]
-   [telsos.lib.edn-json :as edn-json]
-   [telsos.svc.jdbc :as jdbc]
-   [tick.core :as tick])
+   [telsos.lib.edn-json :as edn-json])
   (:import
    (org.postgresql.util PGobject PSQLException)))
 
@@ -12,82 +9,10 @@
 (set! *unchecked-math* :warn-on-boxed)
 
 ;; SERIALIZABLE FAILURES DETECTION AND RESTARTS
-(defn- serialization-failure?
+(defn serialization-failure?
   [obj]
-  (or (and (instance? PSQLException obj)
-           ;; https://www.postgresql.org/docs/17/errcodes-appendix.html
-           (= "40001" (.getSQLState ^PSQLException obj)))
-
-      (and (instance? Exception obj)
-           (recur (.getCause ^Exception obj)))))
-
-(defn- signal-restarting-event*
-  [events-handler event]
-  (the map? event)
-  (-> event
-      (assoc :thread-id (.threadId (Thread/currentThread)) :instant (tick/instant))
-      events-handler))
-
-(defmacro ^:private signal-restarting-event
-  [events-handler event]
-  (the symbol? events-handler)
-  `(when ~events-handler
-     (signal-restarting-event* ~events-handler ~event)))
-
-(defn restarting-on-serialization-failures*
-  [times perfstats restarts-counter events-handler body]
-  (the nat-int? times)
-  (maybe jdbc/perfstats? perfstats)
-  (maybe jdbc/restarts-counter? restarts-counter)
-  (maybe ifn? events-handler)
-  (the ifn? body)
-
-  (let [start-nanos
-        (when perfstats (System/nanoTime))
-
-        result
-        (loop [i 0]
-          (if (= i times)
-            ;; The last attempt - no special treatment, just evaluation of body
-            (do (signal-restarting-event events-handler {:last-attempt i})
-                (body))
-
-            (let [result
-                  (try
-                    (signal-restarting-event events-handler {:attempt i})
-                    (body)
-
-                    (catch Exception e
-                      (when-not (serialization-failure? e)
-                        ;; Other exceptions are simply re-thrown
-                        (signal-restarting-event events-handler {:no-pg-serialization-failure e})
-                        (throw e))
-
-                      (when restarts-counter
-                        (let [cnt (jdbc/restarts-counter-inc! restarts-counter)]
-                          (signal-restarting-event events-handler {:restarts-counter-inc! cnt})))
-
-                      ::serialization-failure))]
-
-              (if (not= ::serialization-failure result)
-                (do (signal-restarting-event events-handler {:exit-loop-with result})
-                    result)
-
-                (recur (unchecked-inc-int i))))))]
-
-    (when perfstats
-      (let [end-nanos (System/nanoTime)]
-        (signal-restarting-event events-handler {:perfstats-update! [start-nanos end-nanos]})
-        (jdbc/perfstats-update! perfstats start-nanos end-nanos)))
-
-    (signal-restarting-event events-handler {:return result})
-    result))
-
-(defmacro restarting
-  [{:keys [times perfstats restarts-counter events-handler]} & body]
-  `(restarting-on-serialization-failures*
-     ~times ~perfstats ~restarts-counter ~events-handler
-     (fn [] ~@body)))
+  (and (instance? PSQLException obj)
+       (= "40001" (.getSQLState ^PSQLException obj))))
 
 ;; JSONB
 (defn create-jsonb-object [value]

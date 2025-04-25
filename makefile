@@ -65,7 +65,7 @@ uberjar:
 	@clojure -T:build uberjar
 
 # NATIVE
-TELSOS_UBERJAR := $(shell find target -name "telsos-svc-*-STANDALONE.jar" | head -n 1)
+TELSOS_UBERJAR := $(shell find target -name "telsos-svc-*-STANDALONE.jar" 2>/dev/null | head -n 1)
 native:
 	native-image \
 		--no-fallback \

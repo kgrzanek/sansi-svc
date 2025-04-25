@@ -30,16 +30,19 @@
 
     (->> (is (jdbc/in-transaction?))
          (jdbc/serializable [@test-postgres-datasource])
-         (pg/restarting {:times 0}))
+         (jdbc/restarting {:times                  0
+                           :serialization-failure? pg/serialization-failure?}))
 
     (->> (is (thrown? IllegalStateException (jdbc/no-transaction! true)))
          (jdbc/serializable  [@test-postgres-datasource])
-         (pg/restarting {:times 0}))
+         (jdbc/restarting {:times                  0
+                           :serialization-failure? pg/serialization-failure?}))
 
     (is (= Connection/TRANSACTION_READ_COMMITTED
            (->> (Connection/.getTransactionIsolation @jdbc/t-conn*)
                 (jdbc/read-committed [@test-postgres-datasource])
-                (pg/restarting  {:times 0}))))
+                (jdbc/restarting  {:times                  0
+                                   :serialization-failure? pg/serialization-failure?}))))
 
     (is (= 3 (->> @jdbc/t-conn*
                   all-test1-data
@@ -48,13 +51,15 @@
                   count
                   ;; [1] The usage of a datasource goes like that:
                   (jdbc/read-committed [@test-postgres-datasource])
-                  (pg/restarting  {:times 0})))))
+                  (jdbc/restarting  {:times                  0
+                                     :serialization-failure? pg/serialization-failure?})))))
 
   (testing "repeatable-read"
     (is (= Connection/TRANSACTION_REPEATABLE_READ
            (->> (Connection/.getTransactionIsolation @jdbc/t-conn*)
                 (jdbc/repeatable-read [@test-postgres-datasource])
-                (pg/restarting   {:times 0}))))
+                (jdbc/restarting {:times                  0
+                                  :serialization-failure? pg/serialization-failure?}))))
 
     (is (= 3 (->> @jdbc/t-conn*
                   all-test1-data
@@ -62,13 +67,15 @@
                   vec
                   count
                   (jdbc/repeatable-read [@test-postgres-datasource])
-                  (pg/restarting   {:times 1})))))
+                  (jdbc/restarting {:times                  1
+                                    :serialization-failure? pg/serialization-failure?})))))
 
   (testing "serializable"
     (is (= Connection/TRANSACTION_SERIALIZABLE
            (->> (Connection/.getTransactionIsolation @jdbc/t-conn*)
                 (jdbc/serializable  [@test-postgres-datasource])
-                (pg/restarting {:times 0}))))
+                (jdbc/restarting {:times                  0
+                                  :serialization-failure? pg/serialization-failure?}))))
 
     (is (= 3 (->> @jdbc/t-conn*
                   all-test1-data
@@ -76,7 +83,8 @@
                   vec
                   count
                   (jdbc/serializable  [@test-postgres-datasource])
-                  (pg/restarting {:times 1}))))))
+                  (jdbc/restarting {:times                  1
+                                    :serialization-failure? pg/serialization-failure?}))))))
 
 (defn- inc-test1-val-with-delay!
   [id delay-msecs]
@@ -88,7 +96,8 @@
   (testing "simple update, no restarts behavior"
     (is (= 1 (->> (inc-test1-val-with-delay! 1 1)
                   (jdbc/serializable [@test-postgres-datasource])
-                  (pg/restarting {:times 0})))))
+                  (jdbc/restarting {:times                  0
+                                    :serialization-failure? pg/serialization-failure?})))))
 
   (testing "restart of tx1 in future-1"
     (let [events-atom    (atom [])
@@ -97,7 +106,9 @@
           future-1
           (->> (inc-test1-val-with-delay! 1 100 #_msecs)
                (jdbc/serializable  [@test-postgres-datasource])
-               (pg/restarting {:times 0 :events-handler events-handler})
+               (jdbc/restarting {:times                  0
+                                 :events-handler         events-handler
+                                 :serialization-failure? pg/serialization-failure?})
                (future))
 
           _ (Thread/sleep 50 #_msecs)
@@ -105,7 +116,9 @@
           future-2
           (->> (inc-test1-val-with-delay! 1 1 #_msecs)
                (jdbc/serializable  [@test-postgres-datasource])
-               (pg/restarting {:times 1 :events-handler events-handler})
+               (jdbc/restarting {:times                  1
+                                 :events-handler         events-handler
+                                 :serialization-failure? pg/serialization-failure?})
                (future))]
 
       (is (= 1 @future-1))
