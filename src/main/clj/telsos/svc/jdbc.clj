@@ -1,18 +1,18 @@
 (ns telsos.svc.jdbc
   (:require
    [clojure.string :as str]
-   [hikari-cp.core :as hikari]
-   [hugsql.adapter :as hugsql-adapter]
-   [hugsql.adapter.next-jdbc :as next-adapter]
-   [hugsql.core :as hugsql]
-   [next.jdbc :as next]
-   [next.jdbc.protocols :as next-protocols]
-   [next.jdbc.result-set :as next-result-set]
+   [hikari-cp.core]
+   [hugsql.adapter]
+   [hugsql.adapter.next-jdbc]
+   [hugsql.core]
+   [next.jdbc]
+   [next.jdbc.protocols]
+   [next.jdbc.result-set]
    [telsos.lib.assertions :refer [maybe the]]
-   [telsos.lib.binding :as binding]
-   [telsos.lib.fast :as fast]
+   [telsos.lib.binding]
+   [telsos.lib.fast]
    [telsos.lib.logging :as log]
-   [tick.core :as tick])
+   [tick.core :as t])
   (:import
    (com.zaxxer.hikari HikariDataSource)
    (java.util.concurrent.atomic AtomicLong)
@@ -21,9 +21,9 @@
 (set! *warn-on-reflection*       true)
 (set! *unchecked-math* :warn-on-boxed)
 
-(->> {:builder-fn next-result-set/as-unqualified-maps}
-     (next-adapter/hugsql-adapter-next-jdbc)
-     (hugsql/set-adapter!))
+(->> {:builder-fn next.jdbc.result-set/as-unqualified-maps}
+     (hugsql.adapter.next-jdbc/hugsql-adapter-next-jdbc)
+     (hugsql.core/set-adapter!))
 
 ;; TRANSACTIONS
 (def isolation-value?
@@ -41,9 +41,9 @@
       (datasource?   x) ;; ~1ns
 
       ;; ~5μs - we should avoid getting here if possible
-      (satisfies? next-protocols/Sourceable x)))
+      (satisfies? next.jdbc.protocols/Sourceable x)))
 
-(def t-conn* (binding/create-scoped))
+(def t-conn* (telsos.lib.binding/create-scoped))
 
 (defn in-transaction? [] (some?        @t-conn*))
 (defn no-transaction? [] (not (in-transaction?)))
@@ -58,12 +58,12 @@
   [transactable isolation read-only? rollback-only? body]
   (the   transactable? transactable)
   (maybe isolation-value? isolation)
-  (next/with-transaction
+  (next.jdbc/with-transaction
     [t-conn transactable {:isolation     (or isolation :read-committed)
                           :read-only     read-only?
                           :rollback-only rollback-only?}]
 
-    (binding/scoped [t-conn* t-conn] (body))))
+    (telsos.lib.binding/scoped [t-conn* t-conn] (body))))
 
 (defmacro read-committed
   [[transactable read-only? rollback-only?] & body]
@@ -92,7 +92,9 @@
   [perfstats]
   (or (instance? PerfStats perfstats)
       (and (vector?        perfstats)
-           (fast/vec-every? #(instance? PerfStats %) perfstats))))
+
+           (telsos.lib.fast/vec-every?
+             #(instance? PerfStats %) perfstats))))
 
 (defn perfstats-update!
   [perfstats ^long start-nanos ^long end-nanos]
@@ -134,7 +136,7 @@
   [events-handler event]
   (the map? event)
   (-> event
-      (assoc :thread-id (.threadId (Thread/currentThread)) :instant (tick/instant))
+      (assoc :thread-id (.threadId (Thread/currentThread)) :instant (t/instant))
       events-handler))
 
 (defmacro ^:private signal-restarting-event
@@ -167,37 +169,48 @@
         (loop [i 0]
           (if (= i times)
             ;; The last attempt - no special treatment, just evaluation of body
-            (do (signal-restarting-event events-handler {:last-attempt i})
+            (do (signal-restarting-event
+                  events-handler {:last-attempt i})
                 (body))
 
             (let [result
-                  (try (signal-restarting-event events-handler {:attempt i})
-                       (body)
+                  (try
+                    (signal-restarting-event
+                      events-handler {:attempt i})
+                    (body)
 
-                       (catch Exception e
-                         (when-not (-serialization-failure? serialization-failure? e)
-                           ;; Other exceptions are simply re-thrown
-                           (signal-restarting-event events-handler {:exception e})
-                           (throw e))
+                    (catch Exception e
+                      (when-not (-serialization-failure? serialization-failure? e)
+                        ;; Other exceptions are simply re-thrown
+                        (signal-restarting-event
+                          events-handler {:exception e})
+                        (throw e))
 
-                         (when restarts-counter
-                           (let [cnt (restarts-counter-inc! restarts-counter)]
-                             (signal-restarting-event events-handler {:restarts-counter cnt})))
+                      (when restarts-counter
+                        (let [cnt (restarts-counter-inc! restarts-counter)]
+                          (signal-restarting-event
+                            events-handler {:restarts-counter cnt})))
 
-                         ::serialization-failure))]
+                      ::serialization-failure))]
 
               (if (not= ::serialization-failure result)
-                (do (signal-restarting-event events-handler {:result result})
+                (do (signal-restarting-event
+                      events-handler {:result result})
+
                     result)
 
                 (recur (inc i))))))]
 
     (when perfstats
       (let [end-nanos (System/nanoTime)]
-        (signal-restarting-event events-handler {:perfstats-update! [start-nanos end-nanos]})
+        (signal-restarting-event
+          events-handler {:perfstats-update! [start-nanos end-nanos]})
+
         (perfstats-update! perfstats start-nanos end-nanos)))
 
-    (signal-restarting-event events-handler {:return result})
+    (signal-restarting-event
+      events-handler {:return result})
+
     result))
 
 (defmacro restarting
@@ -208,8 +221,8 @@
 (def log-hugsql*
   (-> "telsos.jdbc.log-hugsql"
       (System/getProperty #_default "false")
-      (Boolean/parseBoolean)
-      (binding/create-scoped)))
+      Boolean/parseBoolean
+      telsos.lib.binding/create-scoped))
 
 (defmacro logging-hugsql
   [& body]
@@ -235,22 +248,22 @@
 
   (condp contains? (:command options)
     #{:! :execute :i! :insert}
-    (hugsql-adapter/execute this db sqlvec options)
+    (hugsql.adapter/execute this db sqlvec options)
 
     #{:<! :returning-execute :? :query :default}
-    (hugsql-adapter/query this db sqlvec options)))
+    (hugsql.adapter/query this db sqlvec options)))
 
 ;; hugsql-adapter/execute
-(defmethod hugsql/hugsql-command-fn :!                 [_] `hugsql-logging-command-fn)
-(defmethod hugsql/hugsql-command-fn :execute           [_] `hugsql-logging-command-fn)
-(defmethod hugsql/hugsql-command-fn :i!                [_] `hugsql-logging-command-fn)
-(defmethod hugsql/hugsql-command-fn :insert            [_] `hugsql-logging-command-fn)
+(defmethod hugsql.core/hugsql-command-fn :!                 [_] `hugsql-logging-command-fn)
+(defmethod hugsql.core/hugsql-command-fn :execute           [_] `hugsql-logging-command-fn)
+(defmethod hugsql.core/hugsql-command-fn :i!                [_] `hugsql-logging-command-fn)
+(defmethod hugsql.core/hugsql-command-fn :insert            [_] `hugsql-logging-command-fn)
 ;; hugsql-adapter/query
-(defmethod hugsql/hugsql-command-fn :<!                [_] `hugsql-logging-command-fn)
-(defmethod hugsql/hugsql-command-fn :returning-execute [_] `hugsql-logging-command-fn)
-(defmethod hugsql/hugsql-command-fn :?                 [_] `hugsql-logging-command-fn)
-(defmethod hugsql/hugsql-command-fn :query             [_] `hugsql-logging-command-fn)
-(defmethod hugsql/hugsql-command-fn :default           [_] `hugsql-logging-command-fn)
+(defmethod hugsql.core/hugsql-command-fn :<!                [_] `hugsql-logging-command-fn)
+(defmethod hugsql.core/hugsql-command-fn :returning-execute [_] `hugsql-logging-command-fn)
+(defmethod hugsql.core/hugsql-command-fn :?                 [_] `hugsql-logging-command-fn)
+(defmethod hugsql.core/hugsql-command-fn :query             [_] `hugsql-logging-command-fn)
+(defmethod hugsql.core/hugsql-command-fn :default           [_] `hugsql-logging-command-fn)
 
 ;; HIKARI CREATION
 (defn create-hikari-datasource
@@ -275,7 +288,7 @@
        ;; :ssl            true
        ;; :ssl-mode      "require"
 
-       hikari/make-datasource))
+       hikari-cp.core/make-datasource))
 
 (defn close-hikari!
   [datasource]

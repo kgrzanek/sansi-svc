@@ -1,10 +1,10 @@
 (ns telsos.svc.migrations
   (:require
-   [clojure.java.io :as io]
-   [migratus.core :as migratus]
+   [clojure.java.io]
+   [migratus.core]
    [telsos.lib.assertions :refer [the]]
    [telsos.lib.logging :as log]
-   [telsos.svc.jdbc :as jdbc]))
+   [telsos.svc.jdbc :refer [datasource?]]))
 
 (set! *warn-on-reflection*       true)
 (set! *unchecked-math* :warn-on-boxed)
@@ -14,7 +14,7 @@
 ;; GENERATING NEW MIGRATION FILE
 (defn create!
   [name- & [type-]]
-  (migratus/create {:migration-dir migrations-dir} name- type-))
+  (migratus.core/create {:migration-dir migrations-dir} name- type-))
 
 ;; IDS
 (defn- ->id
@@ -46,7 +46,7 @@
    (read-ids migrations-dir))
 
   ([dir]
-   (-> (let [dir-file (io/file dir)]
+   (-> (let [dir-file (clojure.java.io/file dir)]
          (assert (.isDirectory dir-file))
          (for [file  (file-seq dir-file)
                :let  [id (file->opt-id file)]
@@ -59,7 +59,7 @@
 ;; DATABASE MIGRATIONS
 (defn up-with-datasource!
   [datasource ids]
-  (the jdbc/datasource? datasource)
+  (the datasource? datasource)
   (let [config
         {:store         :database
          :migration-dir migrations-dir
@@ -67,12 +67,12 @@
 
         ids (->ids ids)]
 
-    (apply migratus/up config ids)
+    (apply migratus.core/up config ids)
     (log/info (str "Applied migratus/up to ids " ids " with " datasource))))
 
 (defn down-with-datasource!
   [datasource ids]
-  (the jdbc/datasource? datasource)
+  (the datasource? datasource)
   (let [config
         {:store         :database
          :migration-dir migrations-dir
@@ -80,7 +80,7 @@
 
         ids (->ids ids)]
 
-    (apply migratus/down config ids)
+    (apply migratus.core/down config ids)
     (log/info (str "Applied migratus/down to ids " ids " with " datasource))))
 
 ;; TESTING FIXTURES
@@ -89,7 +89,7 @@
    (fixture datasource {}))
 
   ([datasource {:keys [only-up?]}]
-   (the jdbc/datasource? datasource)
+   (the datasource? datasource)
    (let [ids (read-ids)]
      (fn [f]
        (up-with-datasource! datasource ids)

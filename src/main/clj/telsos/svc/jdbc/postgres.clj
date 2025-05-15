@@ -1,7 +1,7 @@
 (ns telsos.svc.jdbc.postgres
   (:require
-   [clojure.java.jdbc :as java-jdbc]
-   [telsos.lib.edn-json :as edn-json])
+   [clojure.java.jdbc]
+   [telsos.lib.edn-json])
   (:import
    (org.postgresql.util PGobject PSQLException)))
 
@@ -18,9 +18,9 @@
 (defn create-jsonb-object [value]
   (doto (PGobject.)
     (.setType "jsonb")
-    (.setValue (edn-json/edn->json-string value))))
+    (.setValue (telsos.lib.edn-json/edn->json-string value))))
 
-(extend-protocol java-jdbc/ISQLValue
+(extend-protocol clojure.java.jdbc/ISQLValue
   clojure.lang.IPersistentMap
   (sql-value [m] (create-jsonb-object m))
 
@@ -33,7 +33,7 @@
   java.util.UUID
   (sql-value [uuid] (str uuid)))
 
-(extend-protocol java-jdbc/IResultSetReadColumn
+(extend-protocol clojure.java.jdbc/IResultSetReadColumn
   java.sql.Timestamp
   (result-set-read-column [v _ _]
     (.toInstant v))
@@ -42,5 +42,5 @@
   (result-set-read-column [pgobj _ _]
     (let [value (.getValue pgobj)]
       (case (.getType pgobj)
-        "jsonb" (edn-json/json-string->edn (str value))
+        "jsonb" (telsos.lib.edn-json/json-string->edn (str value))
         :else   value))))
