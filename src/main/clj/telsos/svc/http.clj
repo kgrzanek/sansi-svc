@@ -71,8 +71,8 @@
             {:port  port
              :join? (boolean join?)
 
-             ;; 10MB
-             :max-form-content-size 10485760}
+             ;; 100MB
+             :max-form-content-size (* 100 1024 1024)}
 
             (when use-virtual-threads?
               {:thread-pool

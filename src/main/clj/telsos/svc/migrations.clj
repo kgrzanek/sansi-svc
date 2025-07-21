@@ -4,6 +4,7 @@
    [migratus.core]
    [telsos.lib.assertions :refer [the]]
    [telsos.lib.logging :as log]
+   [telsos.lib.strings]
    [telsos.svc.jdbc :refer [datasource?]]))
 
 (set! *warn-on-reflection*       true)
@@ -18,28 +19,27 @@
 
 ;; IDS
 (defn- ->id
-  [x]
+  ^long [x]
   (let [id (if (sequential? x) (first x) x)]
     (cond
       (int?    id) (long           id)
       (string? id) (Long/parseLong id)
 
       :else
-      (assert false (str "Illegal migration id " x)))))
+      (throw (ex-info "Illegal migration id" {:id x})))))
 
 (defn- ->ids
   [xs]
-  (->> xs (map ->id) (distinct) (sort)))
+  (->> xs (map ->id) distinct sort))
 
-(defn- file->opt-id
-  [^java.io.File file]
+(defn- file->maybe-id
+  ^Long [^java.io.File file]
   (when (.isFile file)
     (let [file-name (.getName file)]
       ;; In names like 20240708172739-create-test1-table.up.sql, the id takes
       ;; the initial 14 digits.
       (when (>= (.length file-name) 14)
-        (try (Long/parseLong (.substring file-name 0 14))
-             (catch NumberFormatException _))))))
+        (telsos.lib.strings/parse-long (.substring file-name 0 14))))))
 
 (defn read-ids
   ([]
@@ -47,9 +47,11 @@
 
   ([dir]
    (-> (let [dir-file (clojure.java.io/file dir)]
-         (assert (.isDirectory dir-file))
+         (when-not (.isDirectory dir-file)
+           (throw (ex-info "Not a directory" {:dir dir})))
+
          (for [file  (file-seq dir-file)
-               :let  [id (file->opt-id file)]
+               :let  [id (file->maybe-id file)]
                :when (some? id)]
 
            id))

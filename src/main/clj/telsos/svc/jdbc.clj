@@ -10,13 +10,10 @@
    [next.jdbc.result-set]
    [telsos.lib.assertions :refer [maybe the]]
    [telsos.lib.binding]
-   [telsos.lib.fast]
    [telsos.lib.logging :as log]
    [tick.core :as t])
   (:import
-   (com.zaxxer.hikari HikariDataSource)
-   (java.util.concurrent.atomic AtomicLong)
-   (telsos.lib PerfStats)))
+   (com.zaxxer.hikari HikariDataSource)))
 
 (set! *warn-on-reflection*       true)
 (set! *unchecked-math* :warn-on-boxed)
@@ -45,7 +42,7 @@
 
 (def t-conn* (telsos.lib.binding/create-scoped))
 
-(defn in-transaction? [] (some?        @t-conn*))
+(defn in-transaction? [] (some?       @t-conn*))
 (defn no-transaction? [] (not (in-transaction?)))
 
 (defmacro no-transaction!
@@ -81,69 +78,12 @@
         (fn [& _more#] ~@body)))
 
 ;; SERIALIZATION FAILURES, RESTARTS, AND PERFORMANCE STATISTICS
-(defn create-perfstats
-  ([n]
-   (PerfStats. n))
-
-  ([n & ns-]
-   (vec (cons (create-perfstats n) (map create-perfstats ns-)))))
-
-(defn perfstats?
-  [perfstats]
-  (or (instance? PerfStats perfstats)
-      (and (vector?        perfstats)
-
-           (telsos.lib.fast/vec-every?
-             #(instance? PerfStats %) perfstats))))
-
-(defn perfstats-update!
-  [perfstats ^long start-nanos ^long end-nanos]
-  (the perfstats? perfstats)
-  (if (instance? PerfStats perfstats)
-    (.update ^PerfStats perfstats start-nanos end-nanos)
-
-    (dotimes [i (count perfstats)]
-      (perfstats-update! (nth perfstats i) start-nanos end-nanos)))
-
-  perfstats)
-
-(defn perfstats-msecs
-  [perfstats]
-  (the perfstats? perfstats)
-  (if (instance? PerfStats perfstats)
-    (let [[n acc avg] (.statsMsecs ^PerfStats perfstats)]
-      {:n (long n) :acc-msecs acc :avg-msecs avg})
-
-    (mapv perfstats-msecs perfstats)))
-
-(defn create-restarts-counter ^AtomicLong
-  []
-  (AtomicLong.))
-
-(defn restarts-counter?
-  [rc]
-  (instance? AtomicLong rc))
-
-(defn restarts-counter-inc! ^long
-  [^AtomicLong restarts-counter]
-  (.incrementAndGet restarts-counter))
-
-(defn restarts-count ^long
-  [^AtomicLong restarts-counter]
-  (.get restarts-counter))
-
-(defn- signal-restarting-event*
+(defn- send-event
   [events-handler event]
   (the map? event)
   (-> event
       (assoc :thread-id (.threadId (Thread/currentThread)) :instant (t/instant))
       events-handler))
-
-(defmacro ^:private signal-restarting-event
-  [events-handler event]
-  (the symbol? events-handler)
-  `(when ~events-handler
-     (signal-restarting-event* ~events-handler ~event)))
 
 (defn- -serialization-failure? [pred ^Throwable e]
   (when (some? e)
@@ -155,61 +95,47 @@
                 (recur (next supps))))))))
 
 (defn restarting-on-serialization-failures*
-  [{:keys [times serialization-failure? perfstats restarts-counter events-handler]} body]
-  (the   nat-int?                     times)
-  (maybe perfstats?               perfstats)
-  (maybe restarts-counter? restarts-counter)
-  (maybe ifn?                events-handler)
-  (the   ifn?        serialization-failure?)
-  (the   ifn?                          body)
+  [{:keys [^long times
+           serialization-failure?
+           restarts-counter-atom
+           events-handler]} body]
 
-  (let [start-nanos (when perfstats (System/nanoTime))
+  (when-not (nat-int? times)
+    (throw (ex-info "times must be >= 0" {:times times})))
+
+  (let [eh? (ifn? events-handler)
 
         result
         (loop [i 0]
           (if (= i times)
             ;; The last attempt - no special treatment, just evaluation of body
-            (do (signal-restarting-event
-                  events-handler {:last-attempt i})
+            (do (when eh? (send-event events-handler {:last-attempt i}))
                 (body))
 
             (let [result
                   (try
-                    (signal-restarting-event
-                      events-handler {:attempt i})
+                    (when eh? (send-event events-handler {:attempt i}))
                     (body)
 
                     (catch Exception e
                       (when-not (-serialization-failure? serialization-failure? e)
                         ;; Other exceptions are simply re-thrown
-                        (signal-restarting-event
-                          events-handler {:exception e})
+                        (when eh? (send-event events-handler {:exception e}))
                         (throw e))
 
-                      (when restarts-counter
-                        (let [cnt (restarts-counter-inc! restarts-counter)]
-                          (signal-restarting-event
-                            events-handler {:restarts-counter cnt})))
+                      (when restarts-counter-atom
+                        (let [cnt (swap! restarts-counter-atom inc)]
+                          (when eh? (send-event events-handler {:restarts-count cnt}))))
 
                       ::serialization-failure))]
 
               (if (not= ::serialization-failure result)
-                (do (signal-restarting-event
-                      events-handler {:result result})
-
+                (do (when eh? (send-event events-handler {:result result}))
                     result)
 
                 (recur (inc i))))))]
 
-    (when perfstats
-      (let [end-nanos (System/nanoTime)]
-        (signal-restarting-event
-          events-handler {:perfstats-update! [start-nanos end-nanos]})
-
-        (perfstats-update! perfstats start-nanos end-nanos)))
-
-    (signal-restarting-event
-      events-handler {:return result})
+    (when eh? (send-event events-handler {:return result}))
 
     result))
 
@@ -226,13 +152,11 @@
 
 (defmacro logging-hugsql
   [& body]
-  `(binding-scoped [log-hugsql* true]
-                   ~@body))
+  `(binding-scoped [log-hugsql* true] ~@body))
 
 (defmacro no-logging-hugsql
   [& body]
-  `(binding-scoped [log-hugsql* false]
-                   ~@body))
+  `(binding-scoped [log-hugsql* false] ~@body))
 
 (defn- sqlvec->string [sqlvec]
   (->> sqlvec
