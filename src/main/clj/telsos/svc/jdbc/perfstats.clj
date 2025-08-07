@@ -1,7 +1,7 @@
 (ns telsos.svc.jdbc.perfstats
   (:require
-   [telsos.lib.assertions :refer [the]]
-   [telsos.lib.fast])
+   [telsos.lib.algorithms.vecs]
+   [telsos.lib.assertions :refer [the]])
   (:import
    (telsos.lib PerfStats)))
 
@@ -20,7 +20,7 @@
   (or (instance? PerfStats perfstats)
       (and (vector?        perfstats)
 
-           (telsos.lib.fast/vec-every?
+           (telsos.lib.algorithms.vecs/vec-every?
              #(instance? PerfStats %) perfstats))))
 
 (defn perfstats-update!

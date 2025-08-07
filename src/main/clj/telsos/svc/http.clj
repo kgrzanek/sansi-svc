@@ -67,18 +67,17 @@
           handler
 
           #_options
-          (merge
-            {:port  port
-             :join? (boolean join?)
+          (merge {:port  port
+                  :join? (boolean join?)
 
-             ;; 100MB
-             :max-form-content-size (* 100 1024 1024)}
+                  ;; 100MB
+                  :max-form-content-size (* 100 1024 1024)}
 
-            (when use-virtual-threads?
-              {:thread-pool
-               (doto (QueuedThreadPool.)
-                 (QueuedThreadPool/.setVirtualThreadsExecutor
-                   (Executors/newVirtualThreadPerTaskExecutor)))})))]
+                 (when use-virtual-threads?
+                   {:thread-pool
+                    (doto (QueuedThreadPool.)
+                      (QueuedThreadPool/.setVirtualThreadsExecutor
+                        (Executors/newVirtualThreadPerTaskExecutor)))})))]
 
     (log/info jetty "started")
 

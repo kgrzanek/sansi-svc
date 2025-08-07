@@ -7,11 +7,11 @@ up:
 
 up-main:
 	@echo "Starting main PostgreSQL..."
-	@$(DC) up -d main-postgres
+	@$(DC) up -d postgres-main
 
 up-test:
 	@echo "Starting test PostgreSQL..."
-	@$(DC) up -d test-postgres
+	@$(DC) up -d postgres-test
 
 down:
 	@echo "Stopping all containers..."
@@ -19,17 +19,17 @@ down:
 
 down-main:
 	@echo "Stopping main PostgreSQL..."
-	@$(DC) stop main-postgres
+	@$(DC) stop postgres-main
 
 down-test:
 	@echo "Stopping test PostgreSQL..."
-	@$(DC) stop test-postgres
+	@$(DC) stop postgres-test
 
 logs-main:
-	@$(DC) logs -f main-postgres
+	@$(DC) logs -f postgres-main
 
 logs-test:
-	@$(DC) logs -f test-postgres
+	@$(DC) logs -f postgres-test
 
 ps:
 	@$(DC) ps
@@ -40,10 +40,10 @@ docker-clean:
 	@sudo rm -rf ${HOME}/.docker-volumes/telsos-svc
 
 psql-main:
-	@docker exec -it telsos-svc-main-postgres psql -U postgres -d telsos
+	@docker exec -it telsos-svc-postgres-main psql -U postgres -d telsos
 
 psql-test:
-	@docker exec -it telsos-svc-test-postgres psql -U postgres -d telsos
+	@docker exec -it telsos-svc-postgres-test psql -U postgres -d telsos
 
 # CLOJURE
 clean:
