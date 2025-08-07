@@ -78,13 +78,6 @@
         (fn [& _more#] ~@body)))
 
 ;; SERIALIZATION FAILURES, RESTARTS, AND PERFORMANCE STATISTICS
-(defn- send-event
-  [events-handler event]
-  (the map? event)
-  (-> event
-      (assoc :thread-id (.threadId (Thread/currentThread)) :instant (t/instant))
-      events-handler))
-
 (defn- -serialization-failure? [pred ^Throwable e]
   (when (some? e)
     (or (pred e)
@@ -93,6 +86,19 @@
           (when supps
             (or (-serialization-failure? pred (first supps))
                 (recur (next supps))))))))
+
+(defonce ^:private SERIALIZATION-FAILURE (Object.))
+
+(defmacro ^:private send-event
+  [events-handler k v & kvs]
+  (the symbol? events-handler)
+  (let [event (apply hash-map k v kvs)
+        event (assoc event
+                     :thread-id `(.threadId (Thread/currentThread))
+                     :instant   `(t/instant))]
+
+    `(when (ifn? ~events-handler)
+       (~events-handler ~event))))
 
 (defn restarting-on-serialization-failures*
   [{:keys [^long times
@@ -103,40 +109,36 @@
   (when-not (nat-int? times)
     (throw (ex-info "times must be >= 0" {:times times})))
 
-  (let [eh? (ifn? events-handler)
-
-        result
+  (let [result
         (loop [i 0]
           (if (= i times)
-            ;; The last attempt - no special treatment, just evaluation of body
-            (do (when eh? (send-event events-handler {:last-attempt i}))
+            (do (send-event events-handler :attempt-last i)
+                ;; The last attempt - no special treatment, just evaluation of body:
                 (body))
 
             (let [result
                   (try
-                    (when eh? (send-event events-handler {:attempt i}))
+                    (send-event events-handler :attempt i)
                     (body)
 
                     (catch Exception e
                       (when-not (-serialization-failure? serialization-failure? e)
-                        ;; Other exceptions are simply re-thrown
-                        (when eh? (send-event events-handler {:exception e}))
+                        (send-event events-handler :exception e)
+                        ;; Exceptions other than serialization failures are simply re-thrown:
                         (throw e))
 
+                      ;; otherwise, on serialization failure:
                       (when restarts-counter-atom
                         (let [cnt (swap! restarts-counter-atom inc)]
-                          (when eh? (send-event events-handler {:restarts-count cnt}))))
+                          (send-event events-handler :restarts-count cnt)))
 
-                      ::serialization-failure))]
+                      SERIALIZATION-FAILURE))]
 
-              (if (not= ::serialization-failure result)
-                (do (when eh? (send-event events-handler {:result result}))
-                    result)
-
+              (if-not (identical? SERIALIZATION-FAILURE result)
+                result
                 (recur (inc i))))))]
 
-    (when eh? (send-event events-handler {:return result}))
-
+    (send-event events-handler :result result)
     result))
 
 (defmacro restarting

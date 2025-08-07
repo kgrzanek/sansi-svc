@@ -13,8 +13,6 @@
 ;;   (slurp "/home/kongra/Devel/hot/golang/mygo/sample_data.json"))
 
 ;; (def test-data (json/json-string->edn test-data-string))
-
 ;; (use 'criterium.core)
-
 ;; (quick-bench (json/json-string->edn test-data-string))
 ;; (quick-bench (json/edn->json-string test-data))

@@ -14,8 +14,9 @@
 
 ;; GENERATING NEW MIGRATION FILE
 (defn create!
-  [name- & [type-]]
-  (migratus.core/create {:migration-dir migrations-dir} name- type-))
+  [name & [type]]
+  (the telsos.lib.strings/non-blank? name)
+  (migratus.core/create {:migration-dir migrations-dir} name type))
 
 ;; IDS
 (defn- ->id
@@ -41,7 +42,7 @@
       (when (>= (.length file-name) 14)
         (telsos.lib.strings/parse-long (.substring file-name 0 14))))))
 
-(defn read-ids
+(defn- read-ids
   ([]
    (read-ids migrations-dir))
 
@@ -59,7 +60,7 @@
        sort distinct vec)))
 
 ;; DATABASE MIGRATIONS
-(defn up-with-datasource!
+(defn- up-with-datasource!
   [datasource ids]
   (the datasource? datasource)
   (let [config
@@ -72,7 +73,7 @@
     (apply migratus.core/up config ids)
     (log/info (str "Applied migratus/up to ids " ids " with " datasource))))
 
-(defn down-with-datasource!
+(defn- down-with-datasource!
   [datasource ids]
   (the datasource? datasource)
   (let [config
