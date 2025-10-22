@@ -1,11 +1,11 @@
 (ns sansi.svc.auth.auth0
   (:require
    [ring.util.response :as ring-response]
+   [telsos.lib]
    [telsos.lib.assertions :refer [the]]
    [telsos.lib.logging :as log]
    [telsos.lib.strings :refer [non-blank?]]
-   [telsos.svc.config :as config]
-   [telsos.svc.secrets :as secrets])
+   [telsos.svc.config :as config])
   (:import
    (com.auth0.client.auth AuthAPI)
    (com.auth0.json.auth TokenHolder UserInfo)))
@@ -14,10 +14,10 @@
 (set! *unchecked-math* :warn-on-boxed)
 
 ;; AUTH-API
-(defonce ^:private secrets (->> secrets/value :auth0 (the map?)))
+(defonce ^:private secrets (->> config/secrets :auth0 (the map?)))
 
 (defonce ^:private config
-  (let [base-url (->> config/value :base-url (the non-blank?))]
+  (let [base-url (->> config/config :base-url (the non-blank?))]
     {:callback-url     (str base-url "/auth0/callback")
      :after-logout-url base-url}))
 
