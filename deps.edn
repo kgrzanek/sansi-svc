@@ -20,18 +20,18 @@
   org.postgresql/postgresql              {:mvn/version "42.7.8"}
   ring/ring-core                         {:mvn/version "1.15.3"}
   ring/ring-jetty-adapter                {:mvn/version "1.15.3"}
-  tick/tick                              {:mvn/version "1.0"}}
+  tick/tick                              {:mvn/version "1.0"}
 
   buddy/buddy-auth                       {:mvn/version "3.0.323"}
-  com.auth0/auth0                        {:mvn/version "2.16.0"}}
+  com.auth0/auth0                        {:mvn/version "2.25.0"}}
 
  :aliases
  {:build
-  {:deps {io.github.clojure/tools.build {:mvn/version "0.10.10"}}
+  {:deps       {io.github.clojure/tools.build {:mvn/version "0.10.10"}}
    :ns-default build}
 
   :kaocha
   {:extra-deps {lambdaisland/kaocha {:mvn/version "1.91.1392"}
                 circleci/bond       {:mvn/version "0.6.0"}}
 
-   :main-opts  ["-m" "kaocha.runner"]}}
+   :main-opts ["-m" "kaocha.runner"]}}}

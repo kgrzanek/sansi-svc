@@ -4,7 +4,7 @@
    [ring.util.response :as ring-response]
    [telsos.lib.assertions :refer [the]]
    [telsos.lib.strings :refer [non-blank?]]
-   [telsos.svc.secrets :as secrets]
+   [telsos.svc.config :as config]
    [tick.core :as t])
   (:import
    (java.security SecureRandom)
@@ -21,7 +21,7 @@
     (.nextBytes random buffer)
     (.encodeToString (Base64/getEncoder) buffer)))
 
-(defonce ^:private secret (->> secrets/value :bearer-token-secret (the non-blank?)))
+(defonce ^:private secret (->> config/secrets :bearer-token-secret (the non-blank?)))
 
 (defn create-token
   ([user-id duration-value duration-unit]
@@ -52,8 +52,12 @@
             (when (.startsWith auth-header "Bearer ")
               (.substring auth-header 7)))
 
-          claims  (parse-token token)
-          request (if-not claims request (assoc request :bearer-token-claims claims))]
+          claims
+          (parse-token token)
+
+          request
+          (cond-> request
+            (some? claims) (assoc :bearer-token-claims claims))]
 
       (handler request))))
 
